@@ -2,7 +2,7 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%   Muscadet version 4.6.3a  %%  
-%%      30/05/17            %%
+%%      19/02/17            %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -69,11 +69,10 @@ priorites(avec).
 
 probleme(pas_encore_de_probleme). 
 
-%% direct | th | tptp | (tptp & casc)
 %% version(direct).
 %% version(th).
 %% version(tptp).
-%% version(casc). 
+%% version(casc).
 
 %% temps limite par defaut
 tempslimite(20). 
@@ -162,7 +161,7 @@ regle(Nom) :- clause(regle(_,Nom ),Q), ecrire1(Q).
 appliregactiv(N) :- 
                 repeat,
               ( concl(N, true, _) -> demontre(N) 
-              ; concl(N, _/timeout, _) -> message(aaaaaaaaaaaaaaa),!, nondemontre(N)
+              ; concl(N, _/timeout, _) -> !, nondemontre(N)
               ; reglactiv(N,LR) ->  ( applireg(N,LR)-> fail ;! )  
               ) .           
 %% +++
@@ -191,18 +190,18 @@ tempsdepasse(N,Marqueur) :- statistics(cputime,T),!,
    ( concl(N,C, _) -> nouvconcl(N,C/timeout, _)
    ; true 
    ),
+   nomdutheoreme(Nomdutheoreme),
    ME      =('temps limite depasse N='),
     ES     =(' dans '),
-     SS    =('\ntheoreme non demontre'),
-      SA   =('en'),
-       AG  =('secondes (timeout)\n'),
-   MESSAGE = [ME,N,ES,Marqueur,SS,SA,T,AG],
+     SS    =('\ntheoreme initial non demontre ('),
+      SA   =(') en '),
+       AG  =(' secondes (timeout)\n'),
+   MESSAGE = [ME,N,ES,Marqueur,SS,Nomdutheoreme,SA,T,AG],
    message(MESSAGE),nl,
              (N = -1 -> probleme(P),atom_concat(res_,P,RES),tell(RES)
              ; true),
              acrire1(tr,MESSAGE),nl,
              ! , 
-            nondemontre(0),
             break 
                     .
 
@@ -215,7 +214,7 @@ tempsdepasse(N,Marqueur) :- statistics(cputime,T),!,
 %% et eventuellement extrait la preuve utile et le temps de cette extraction
 demontre(N) :- 
    ( N=0 -> ( version(tptp),conjecture(false,_) -> 
-           message('pas de conjecture, probleme montre insatisfaisable')
+              message('pas de conjecture, probleme montre insatisfaisable')
             ; message('theoreme demontre')
             ),
             ( afficher(tr) -> acrire1(tr,[theoreme,demontre])
@@ -233,13 +232,10 @@ demontre(N) :-
             ; Nomdutheoreme=direct -> true
             ; ecrire(Texte)
             ), 
-            (version(casc)-> true
-            ; messagetemps(Tdem),
-              (version(tptp) -> ecrire1([probleme,P,resolu]),
-                                ecrire1('== == == == == == == == == == ')
-              ; true
-              )
-            ),
+            (version(casc)-> true;messagetemps(Tdem)),
+            concat_atom([problem,' ',P,' ',solved], ProblemPresolu),
+            ecrire1(ProblemPresolu),
+            ecrire1('== == == == == == == == == == '),
             ligne(szs),
             (afficher(szs) -> ( conjecture(false,_) ->
                                  ecrire1('SZS status Unsatisfiable for ')
@@ -255,15 +251,14 @@ demontre(N) :-
                 ( version(casc) -> true 
                 ; statistics(cputime,Tapresutile),
                   Tutile is Tapresutile-Tavantutile,
-                 ecrire1('preuve extraite'), 
-                 message('preuve extraite'), 
+                  ecrire1('preuve extraite'), 
+                  message('preuve extraite'), 
                   messagetemps(Tutile),
                   message('')
                 )
             ; true
             ) 
-   ; %% N>0
-     acrire1(tr,[theoreme,N,demontre]) 
+   ; acrire1(tr,[theoreme,N,demontre]) 
    ) .
 %% +++
 
@@ -272,7 +267,8 @@ demontre(N) :-
 %% nondemontre(N) affiche l'echec pour le (sous-)theoreme de numero N
 %% si N=0 affiche le temps passe (selon options)
 nondemontre(N) :- 
-  ( N=0 -> ecrire1etmessage('theoreme non demontre '),
+  ( N=0 -> message('theoreme non demontre'),
+           ecrire1([theoreme,non,demontre]),
            probleme(P),
            temps_debut(TD),
            statistics(cputime,Tapresdem),Tdem is Tapresdem-TD,
@@ -282,23 +278,19 @@ nondemontre(N) :-
            ),
             (version(casc) ->true
             ; Nomdutheoreme=direct -> true
-            ; ecrire(Texte), message0(Texte)
+            ; ecrire(Texte)
             ),
-            ( version(casc)-> true
-            ; messagetemps(Tdem),
-              ( version(tptp) -> ecrire1([probleme,P,non,resolu]),
-                                 ecrire1('== == == == == == == == == == ')
-              ; true
-              )
-            ),
+            (version(casc)-> true;messagetemps(Tdem)),
+            concat_atom([probleme,' ',P,' non ',resolu], ProblemnonPresolu),
+            ecrire1(ProblemnonPresolu),
+            ecrire1('== == == == == == == == == == '),
             ligne(szs),
 
            (afficher(szs) ->  nl,nl, write('SZS status GaveUp for '),
                                probleme(P),write(P)
            ; true 
            )
-  ; 
-    acrire1(tr,[theoreme,N,non,demontre])
+  ; acrire1(tr,[theoreme,N,non,demontre]) 
   ), 
   !. 
 
@@ -550,9 +542,11 @@ demconj(N,C,Econj, Efin) :-
  atom_concat(N,-,N0), gensym(N0,N1), %% N1=N-1, N-2, ..., N-i, ...
  creersousth(N,N1,A,Ecreationsousth),
  (B=true -> Cond=[],
-            Expli=('demonstration du dernier element de la conjonction')
+            Expli_fr='demonstration du dernier element de la conjonction',
+            Expli_en='proof of the last element of the conjunction'
  ; Cond=concl(N, C, Econj),
-   Expli=('pour demontrer une conjonction, on demontre successivement tous les elements de la conjonction')
+   Expli_fr='pour demontrer une conjonction, on demontre successivement tous les elements de la conjonction',
+   Expli_en='to prove a conjunction, prove all the elements of the conjunction'
  ),
  traces(N1, %% numero du sous-théorème 
         action(demconj), %% nom de l' action 
@@ -560,7 +554,7 @@ demconj(N,C,Econj, Efin) :-
         [creersousth(N,N1,A,Ecreationsousth), %% actions creation N1
            nouvconcl(N1,A,Ecreationsousth)],  %%         conclusion
         (Ecreationsousth), %% étape 
-        Expli, %% explication 
+        Expli_fr, %% explication 
         ([Econj]) %% antecedents
        ),
  acrire_tirets(tr,[action,demconj]),
@@ -722,19 +716,20 @@ ajhyp(N, H, E2) :-
     %% appel recursif pour une conjonction
     ajhyp(N, A, E2), ajhyp(N,B, E2)
 
-  ; %% H est déjà une hypothèse
-    hyp(N, H,_) -> acrire1(tr,[E2:N,H]),
-                   acrire1(tr,'est déjà une hypothèse'),
-                   true 
+  ; hyp(N, H,_) ->
+    %% H est déjà une hypothèse
+    acrire1(tr,[E2:N,H]),acrire1(tr,fr('est déjà une hypothèse')/en('is already a hypothesis')), true
 
-  ; %% H est une disjonction contenant une hypothese
-    hyp_true(N,H,T) -> assert(hyp(N, H,E2)), acrire1(tr,[E2:N,ajhyp(H)]),
-                       acrire1(tr,['sans effet car on a deja hyp(',T,')']),
-                       ajhyp_traite(N,H)
+  ; hyp_true(N,H,T) -> 
+    %% H est une disjonction contenant une hypothese 
+    assert(hyp(N, H,E2)), acrire1(tr,[E2:N,ajhyp(H)]),
+    acrire1(tr,['sans effet car on a deja hyp(',T,')']),
+    ajhyp_traite(N,H)
 
-  ; %% H est une égalité triviale
-    H = (X = X) -> acrire1(tr,[E2:N,ajhyp(H)]),
-                   acrire(tr,'qui est une egalite triviale')
+  ; H = (X = X) ->
+    %% H est une égalité triviale
+    acrire1(tr,[E2:N,ajhyp(H)]),
+    acrire(tr,'qui est une egalite triviale')
 
   ; H =(X,A) ->
     %% ce type de formule apparait dans le traitement des définitions
@@ -744,13 +739,15 @@ ajhyp(N, H, E2) :-
     creer_objet(N,z,X1), remplacer(A,X,X1,A1), 
     ajhyp(N,A1,I1)
 
-  ; %% les égalités sont normalisées : le 1er terme est le plus petit,
+  ; H = (Y=X), atom(X), atom(Y),
+    %% les égalités sont normalisées : le 1er terme est le plus petit,
     %% lexicographiquement, sauf pour les objets crees z<nombre> où
     %% c'est l'ordre de création (numérique)
-    H = (Y=X), atom(X), atom(Y), avant(X,Y), ajhyp(N,(X=Y),E2)
+    avant(X,Y), ajhyp(N,(X=Y),E2)
 
-  ; %% (pour le pseudo-second ordre) si H est ..[r,X,Y], on ajoute r(X,Y)
-    H = (..[R, X, Y])  -> (H1 =..[R, X, Y]), ajhyp(N, H1, E2)
+  ; H = (..[R, X, Y])  ->
+    %% (pour le pseudo-second ordre) si H est ..[r,X,Y], on ajoute r(X,Y)
+    (H1 =..[R, X, Y]), ajhyp(N, H1, E2)
 
   ; H = (..[F, X]::Y)  -> 
     %% (pour le pseudo-second ordre) si H est ..[f,x]::y, on ajoute f(x):y
@@ -1760,13 +1757,13 @@ ecrire_tirets(E) :- ligne,
 acrire(Option,E) :- (afficher(Option) -> ecrire(E);true).
 acrire1(Option,E) :- (afficher(Option) -> ecrire1(E);true).
 ecrire(E) :- var(E) , write('_'). 
-
-%% +++++++++ ecriture bilingue (pour la version perso (ou fren) ) +++++++++
-ecrire(fr(FR)/en(EN)):- message('il reste un'=fr(FR)/en(EN)). 
-ecrire(fr(FR)/en(EN)+_ ):-
-  (lang(fr) -> (lang(en) -> ecrire(FR/EN) ; ecrire(FR))
-               ;lang(en) -> ecrire(EN)
-               ), !.
+ecrire(fr(FR)/en(EN)):- message('il reste un'=fr(FR)/en(EN)).
+ecrire(fr(FR)/en(EN)+_ ):- ( lang(fr) -> ( lang(en) -> ecrire(FR/EN)
+                                      ; ecrire(FR)
+                                      )
+                        ; lang(en) -> ecrire(EN)
+                        ),
+                        !.
 ecrire(E) :- (var(E) -> write(E)
              ;E = [X|L] -> ecrire(X), tab(1), ecrire(L)
              ;E=[] -> true
@@ -2244,7 +2241,7 @@ demontrerth(Th) :- res(RES), telll(RES),
 %% uniquement pour demonstration directe
 %% ++++++++++++++++++++ demontrerth(Th) ++++++++++++++++++++
 demontrer(Th) :- 
-        affecter(version(direct)),
+        assert(version(direct)),
         travail1th,
         affecter(theoreme(Th)), affecter(theoreme('',Th)),affecter(res(user)),
         affecter(probleme(probleme)), 
